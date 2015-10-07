@@ -744,6 +744,17 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     terminateStateEarly(current, "Query timed out (fork).");
     return StatePair(0, 0);
   }
+  const InstructionInfo &ii = *current.pc->info;
+  if (!isInternal) {
+    if (pathWriter) {
+      std::string Str;
+      llvm::raw_string_ostream info(Str);
+      info << ii.file << ":" << ii.line << "\n";
+      info << stats::instructions << " ";
+      info << *(current.pc->inst) << '\n';
+      current.pathOS << info.str();
+    }
+  }
 
   if (!isSeeding) {
     if (replayPath && !isInternal) {
@@ -835,7 +846,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (res==Solver::True) {
     if (!isInternal) {
       if (pathWriter) {
-        current.pathOS << "1";
+        current.pathOS << "1\n";
       }
     }
 
@@ -843,7 +854,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   } else if (res==Solver::False) {
     if (!isInternal) {
       if (pathWriter) {
-        current.pathOS << "0";
+        current.pathOS << "0\n";
       }
     }
 
@@ -903,8 +914,8 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     if (!isInternal) {
       if (pathWriter) {
         falseState->pathOS = pathWriter->open(current.pathOS);
-        trueState->pathOS << "1";
-        falseState->pathOS << "0";
+        trueState->pathOS << "1\n";
+        falseState->pathOS << "0\n";
       }      
       if (symPathWriter) {
         falseState->symPathOS = symPathWriter->open(current.symPathOS);

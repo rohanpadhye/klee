@@ -468,7 +468,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
       for (std::vector<unsigned char>::iterator I = concreteBranches.begin(),
                                                 E = concreteBranches.end();
            I != E; ++I) {
-        *f << *I << "\n";
+        *f << *I;
       }
       delete f;
     }
