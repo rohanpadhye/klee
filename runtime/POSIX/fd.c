@@ -1426,6 +1426,7 @@ static size_t __concretize_size(size_t s) {
 }
 
 static const char *__concretize_string(const char *s) {
+#ifdef KLEE_CONCRETIZE_STRING
   char *sc = __concretize_ptr(s);
   unsigned i;
 
@@ -1445,7 +1446,7 @@ static const char *__concretize_string(const char *s) {
       if (!cc) break;
     }
   }
-
+#endif
   return s;
 }
 
