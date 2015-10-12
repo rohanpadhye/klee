@@ -126,6 +126,9 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("__ubsan_handle_mul_overflow", handleMulOverflow, false),
   add("__ubsan_handle_divrem_overflow", handleDivRemOverflow, false),
 
+  // shadow execution
+  add("llvm_branch", handleLlvmBranch, false),
+
 #undef addDNR
 #undef add  
 };
@@ -763,4 +766,12 @@ void SpecialFunctionHandler::handleDivRemOverflow(ExecutionState &state,
   executor.terminateStateOnError(state,
                                  "overflow on division or remainder",
                                  "overflow.err");
+}
+
+void SpecialFunctionHandler::handleLlvmBranch(ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) {
+  // Ensure llvm_branch has the required arguments
+  assert(arguments.size() == 6);
+
+  // Process the branch in the executor
+  executor.executeLlvmBranch(state, arguments[0], arguments[5], target);
 }

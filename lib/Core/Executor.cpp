@@ -1155,6 +1155,16 @@ void Executor::executeGetValue(ExecutionState &state,
     }
   }
 }
+  
+void Executor::executeLlvmBranch(ExecutionState &state, ref<Expr> iidRef, ref<Expr> valueRef, KInstruction *target) {
+
+  assert(isa<ConstantExpr>(iidRef));
+  uint64_t iid = cast<ConstantExpr>(iidRef)->getZExtValue();
+
+  // printf("IID: %lu.\n", iid);
+    
+
+}
 
 void Executor::stepInstruction(ExecutionState &state) {
   if (DebugPrintInstructions) {

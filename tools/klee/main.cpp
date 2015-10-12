@@ -753,6 +753,7 @@ static const char *modelledExternals[] = {
 #endif
   "llvm.va_start",
   "llvm.va_end",
+  "llvm_branch",
   "malloc",
   "realloc",
   "_ZdaPv",

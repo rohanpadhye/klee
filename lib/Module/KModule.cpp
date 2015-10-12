@@ -86,6 +86,11 @@ namespace {
   OutputModule("output-module",
                cl::desc("Write the bitcode for the final transformed module"),
                cl::init(false));
+  
+  cl::opt<bool>
+  SkipIntrinsicLink("skip-intrinsic-link",
+               cl::desc("Skip linking of klee's intrinsic functions."),
+               cl::init(false));
 
   cl::opt<SwitchImplType>
   SwitchType("switch-type", cl::desc("Select the implementation of switch"),
@@ -335,20 +340,19 @@ void KModule::prepare(const Interpreter::ModuleOptions &opts,
 #endif
   // FIXME: Missing force import for various math functions.
 
-  // FIXME: Find a way that we can test programs without requiring
-  // this to be linked in, it makes low level debugging much more
-  // annoying.
+  if (!SkipIntrinsicLink) {
 
-  SmallString<128> LibPath(opts.LibraryDir);
-  llvm::sys::path::append(LibPath,
-#if LLVM_VERSION_CODE >= LLVM_VERSION(3,3)
-      "kleeRuntimeIntrinsic.bc"
-#else
-      "libkleeRuntimeIntrinsic.bca"
-#endif
-    );
-  module = linkWithLibrary(module, LibPath.str());
+    SmallString<128> LibPath(opts.LibraryDir);
+    llvm::sys::path::append(LibPath,
+  #if LLVM_VERSION_CODE >= LLVM_VERSION(3,3)
+        "kleeRuntimeIntrinsic.bc"
+  #else
+        "libkleeRuntimeIntrinsic.bca"
+  #endif
+      );
+    module = linkWithLibrary(module, LibPath.str());
 
+  }
   // Add internal functions which are not used to check if instructions
   // have been already visited
   if (opts.CheckDivZero)
