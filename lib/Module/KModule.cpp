@@ -305,8 +305,8 @@ void KModule::prepare(const Interpreter::ModuleOptions &opts,
   // module.
   PassManager pm;
   pm.add(new RaiseAsmPass());
-  if (opts.CheckDivZero) pm.add(new DivCheckPass());
-  if (opts.CheckOvershift) pm.add(new OvershiftCheckPass());
+  if (opts.CheckDivZero && !SkipIntrinsicLink) pm.add(new DivCheckPass());
+  if (opts.CheckOvershift && !SkipIntrinsicLink) pm.add(new OvershiftCheckPass());
   // FIXME: This false here is to work around a bug in
   // IntrinsicLowering which caches values which may eventually be
   // deleted (via RAUW). This can be removed once LLVM fixes this
@@ -355,9 +355,9 @@ void KModule::prepare(const Interpreter::ModuleOptions &opts,
   }
   // Add internal functions which are not used to check if instructions
   // have been already visited
-  if (opts.CheckDivZero)
+  if (opts.CheckDivZero && !SkipIntrinsicLink)
     addInternalFunction("klee_div_zero_check");
-  if (opts.CheckOvershift)
+  if (opts.CheckOvershift && !SkipIntrinsicLink)
     addInternalFunction("klee_overshift_check");
 
 
