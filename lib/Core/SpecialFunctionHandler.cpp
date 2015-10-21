@@ -128,6 +128,9 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
 
   // shadow execution
   add("llvm_branch", handleLlvmBranch, false),
+  add("llvm_call", handleLlvmCall, false),
+  add("llvm_call_user_main", handleLlvmCallUserMain, false),
+  add("llvm_push_string", handleLlvmPushString, false),
 
 #undef addDNR
 #undef add  
@@ -159,7 +162,7 @@ int SpecialFunctionHandler::size() {
 }
 
 SpecialFunctionHandler::SpecialFunctionHandler(Executor &_executor) 
-  : executor(_executor) {}
+  : lockInstrumentation(true), executor(_executor) {}
 
 
 void SpecialFunctionHandler::prepare() {
@@ -769,9 +772,41 @@ void SpecialFunctionHandler::handleDivRemOverflow(ExecutionState &state,
 }
 
 void SpecialFunctionHandler::handleLlvmBranch(ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) {
-  // Ensure llvm_branch has the required arguments
-  assert(arguments.size() == 6);
+  if (!lockInstrumentation) {
+    lockInstrumentation = true;
 
-  // Process the branch in the executor
-  executor.executeLlvmBranch(state, arguments[0], arguments[5], target);
+    assert(arguments.size() == 6);
+
+    // Process the branch in the executor
+    executor.executeLlvmBranch(state, arguments[0], arguments[5], target);
+    lockInstrumentation = false;
+  }
+}
+
+void SpecialFunctionHandler::handleLlvmCall(ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) {
+  if (!lockInstrumentation) {
+    lockInstrumentation = true;
+
+    assert(arguments.size() == 4);
+
+    // Process the branch in the executor
+    executor.executeLlvmCall(state, arguments[0], target);
+    lockInstrumentation = false;
+  }
+}
+
+void SpecialFunctionHandler::handleLlvmCallUserMain(ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) {
+  lockInstrumentation = false;
+}
+
+void SpecialFunctionHandler::handleLlvmPushString(ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) {
+  if (!lockInstrumentation) {
+    lockInstrumentation = true;
+
+    assert(arguments.size() == 1);
+
+    // Process the branch in the executor
+    executor.executeLlvmPushString(state, arguments[0], target);
+    lockInstrumentation = false;
+  }
 }

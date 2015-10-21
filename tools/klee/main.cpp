@@ -255,7 +255,8 @@ public:
 
   // load a .path file
   static void loadPathFile(std::string name,
-                           std::vector<bool> &buffer);
+                           std::vector<bool> &buffer,
+                           std::vector<SwitchCase> &switchCases);
 
   static void getOutFiles(std::string path,
 			  std::vector<std::string> &results);
@@ -538,16 +539,39 @@ void KleeHandler::processTestCase(const ExecutionState &state,
 
   // load a .path file
 void KleeHandler::loadPathFile(std::string name,
-                                     std::vector<bool> &buffer) {
+                               std::vector<bool> &buffer,
+                               std::vector<SwitchCase> &switchCases) {
   std::ifstream f(name.c_str(), std::ios::in | std::ios::binary);
 
   if (!f.good())
     assert(0 && "unable to open path file");
 
   while (f.good()) {
-    unsigned value;
-    f >> value;
-    buffer.push_back(!!value);
+    char a = f.get();
+    switch (a) {
+      case -1:
+        break;
+      case '0':
+        buffer.push_back(0);
+        break;
+      case '1':
+        buffer.push_back(1);
+        break;
+      case 'c':
+        SwitchCase c;
+        c.isDefault = false;
+        f >> c.value;
+        switchCases.push_back(c);
+        break;
+      case 'd':
+        SwitchCase d;
+        d.isDefault = true;
+        d.value = 0;
+        switchCases.push_back(d);
+        break;
+      default:
+        assert(0 && "invalid path file");
+    }
     f.get();
   }
 }
@@ -754,6 +778,9 @@ static const char *modelledExternals[] = {
   "llvm.va_start",
   "llvm.va_end",
   "llvm_branch",
+  "llvm_call",
+  "llvm_call_user_main",
+  "llvm_push_string",
   "malloc",
   "realloc",
   "_ZdaPv",
@@ -1352,9 +1379,10 @@ int main(int argc, char **argv, char **envp) {
   }
 
   std::vector<bool> replayPath;
+  std::vector<SwitchCase> replayCases;
 
   if (ReplayPathFile != "") {
-    KleeHandler::loadPathFile(ReplayPathFile, replayPath);
+    KleeHandler::loadPathFile(ReplayPathFile, replayPath, replayCases);
   }
 
   Interpreter::InterpreterOptions IOpts;
@@ -1375,7 +1403,7 @@ int main(int argc, char **argv, char **envp) {
   externalsAndGlobalsCheck(finalModule);
 
   if (ReplayPathFile != "") {
-    interpreter->setReplayPath(&replayPath);
+    interpreter->setReplayPath(&replayPath, &replayCases);
   }
 
   char buf[256];

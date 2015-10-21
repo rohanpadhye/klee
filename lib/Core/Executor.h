@@ -100,6 +100,8 @@ public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
 
 private:
+  bool stopOnNextFork;
+  uint64_t targetBranch;
   class TimerInfo;
 
   KModule *kmodule;
@@ -152,9 +154,11 @@ private:
   const struct KTest *replayOut;
   /// When non-null a list of branch decisions to be used for replay.
   const std::vector<bool> *replayPath;
+  const std::vector<SwitchCase> *replayCases;
   /// The index into the current \ref replayOut or \ref replayPath
   /// object.
   unsigned replayPosition;
+  unsigned casesPosition;
 
   /// When non-null a list of "seed" inputs which will be used to
   /// drive execution.
@@ -342,6 +346,12 @@ private:
   // Handle an LLVM branch during replay
   void executeLlvmBranch(ExecutionState &state, ref<Expr> iid, ref<Expr> value, KInstruction *target);
 
+  // Handle an LLVM call during replay
+  void executeLlvmCall(ExecutionState &state, ref<Expr> iid, KInstruction *target);
+
+  // Handle an LLVM push string during replay
+  void executeLlvmPushString(ExecutionState &state, ref<Expr> c, KInstruction *target);
+
   /// Get textual information regarding a memory address.
   std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
 
@@ -423,10 +433,13 @@ public:
     replayPosition = 0;
   }
 
-  virtual void setReplayPath(const std::vector<bool> *path) {
+  virtual void setReplayPath(const std::vector<bool> *path,
+                             const std::vector<SwitchCase> *cases) {
     assert(!replayOut && "cannot replay both buffer and path");
     replayPath = path;
+    replayCases = cases;
     replayPosition = 0;
+    casesPosition = 0;
   }
 
   virtual const llvm::Module *

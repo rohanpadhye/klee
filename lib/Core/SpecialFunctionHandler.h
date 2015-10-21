@@ -28,6 +28,7 @@ namespace klee {
   
   class SpecialFunctionHandler {
   public:
+    bool lockInstrumentation;
     typedef void (SpecialFunctionHandler::*Handler)(ExecutionState &state,
                                                     KInstruction *target, 
                                                     std::vector<ref<Expr> > 
@@ -138,6 +139,9 @@ namespace klee {
     HANDLER(handleSubOverflow);
     HANDLER(handleDivRemOverflow);
     HANDLER(handleLlvmBranch);
+    HANDLER(handleLlvmCall);
+    HANDLER(handleLlvmCallUserMain);
+    HANDLER(handleLlvmPushString);
 #undef HANDLER
   };
 } // End klee namespace

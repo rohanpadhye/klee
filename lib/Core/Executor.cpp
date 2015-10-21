@@ -237,6 +237,11 @@ namespace {
            cl::desc("Amount of time to dedicate to seeds, before normal search (default=0 (off))"),
            cl::init(0));
   
+  cl::opt<std::string>
+  ReplayUntilBranch("replay-until-branch",
+                    cl::desc("Stop execution when branch with given IID is reached (default=0 (off))"),
+                    cl::init(""));
+
   cl::opt<unsigned int>
   StopAfterNInstructions("stop-after-n-instructions",
                          cl::desc("Stop execution after specified number of instructions (default=0 (off))"),
@@ -272,6 +277,8 @@ namespace klee {
 Executor::Executor(const InterpreterOptions &opts,
                    InterpreterHandler *ih) 
   : Interpreter(opts),
+    stopOnNextFork(false),
+    targetBranch(0),
     kmodule(0),
     interpreterHandler(ih),
     searcher(0),
@@ -283,6 +290,7 @@ Executor::Executor(const InterpreterOptions &opts,
     processTree(0),
     replayOut(0),
     replayPath(0),    
+    replayCases(0),
     usingSeeds(0),
     atMemoryLimit(false),
     inhibitForking(false),
@@ -291,7 +299,10 @@ Executor::Executor(const InterpreterOptions &opts,
     coreSolverTimeout(MaxCoreSolverTime != 0 && MaxInstructionTime != 0
       ? std::min(MaxCoreSolverTime,MaxInstructionTime)
       : std::max(MaxCoreSolverTime,MaxInstructionTime)) {
-      
+
+  if (ReplayUntilBranch != "") {
+    targetBranch = strtoul(ReplayUntilBranch.c_str(), NULL, 0);
+  }
   if (coreSolverTimeout) UseForkedCoreSolver = true;
   
   Solver *coreSolver = NULL;
@@ -706,6 +717,11 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     seedMap.find(&current);
   bool isSeeding = it != seedMap.end();
 
+  if (stopOnNextFork) {
+    fprintf(stderr, "Stopping execution!\n");
+    terminateStateEarly(current, "Reached target branch.");
+  }
+
   if (!isSeeding && !isa<ConstantExpr>(condition) && 
       (MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
        MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.) &&
@@ -752,7 +768,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
       info << ii.file << ":" << ii.line << "\n";
       info << stats::instructions << " ";
       info << *(current.pc->inst) << '\n';
-      current.pathOS << info.str();
+      // current.pathOS << info.str();
     }
   }
 
@@ -1160,9 +1176,28 @@ void Executor::executeLlvmBranch(ExecutionState &state, ref<Expr> iidRef, ref<Ex
 
   assert(isa<ConstantExpr>(iidRef));
   uint64_t iid = cast<ConstantExpr>(iidRef)->getZExtValue();
+  if (iid == targetBranch) {
+    fprintf(stderr, "Reached target branch %lu\n", iid);
+    stopOnNextFork = true;
+  }
+  // fprintf(stderr, "%lu\n", iid);
+}
 
-  // printf("IID: %lu.\n", iid);
-    
+void Executor::executeLlvmCall(ExecutionState &state, ref<Expr> iidRef, KInstruction *target) {
+
+  // assert(isa<ConstantExpr>(iidRef));
+  // uint64_t iid = cast<ConstantExpr>(iidRef)->getZExtValue();
+
+  // fprintf(stderr, "Calling %lu\n", iid);
+
+}
+
+void Executor::executeLlvmPushString(ExecutionState &state, ref<Expr> cRef, KInstruction *target) {
+
+  // assert(isa<ConstantExpr>(cRef));
+  // uint64_t c = cast<ConstantExpr>(cRef)->getZExtValue();
+
+  // putc(c, stderr);
 
 }
 
@@ -1560,21 +1595,26 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     BasicBlock *bb = si->getParent();
 
     cond = toUnique(state, cond);
-    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
-      // Somewhat gross to create these all the time, but fine till we
-      // switch to an internal rep.
-      LLVM_TYPE_Q llvm::IntegerType *Ty = 
-        cast<IntegerType>(si->getCondition()->getType());
-      ConstantInt *ci = ConstantInt::get(Ty, CE->getZExtValue());
-#if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)
-      unsigned index = si->findCaseValue(ci).getSuccessorIndex();
-#else
-      unsigned index = si->findCaseValue(ci);
-#endif
-      transferToBasicBlock(si->getSuccessor(index), si->getParent(), state);
-    } else {
+//     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
+//       // Somewhat gross to create these all the time, but fine till we
+//       // switch to an internal rep.
+//       LLVM_TYPE_Q llvm::IntegerType *Ty = 
+//         cast<IntegerType>(si->getCondition()->getType());
+//       ConstantInt *ci = ConstantInt::get(Ty, CE->getZExtValue());
+// #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)
+//       unsigned index = si->findCaseValue(ci).getSuccessorIndex();
+// #else
+//       unsigned index = si->findCaseValue(ci);
+// #endif
+//       transferToBasicBlock(si->getSuccessor(index), si->getParent(), state);
+//     } else {
+      const SwitchCase *replay = NULL;
+      if (replayPath) {
+        replay = &(*replayCases)[casesPosition++];
+      }
       std::map<BasicBlock*, ref<Expr> > targets;
       ref<Expr> isDefault = ConstantExpr::alloc(1, Expr::Bool);
+      std::vector< ref<Expr> > values;
 #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)      
       for (SwitchInst::CaseIt i = si->case_begin(), e = si->case_end();
            i != e; ++i) {
@@ -1589,6 +1629,15 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         bool success = solver->mayBeTrue(state, match, result);
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
+        if (replayPath) {
+          std::string Str;
+          llvm::raw_string_ostream info(Str);
+          value->print(info);
+          std::stringstream strstream;
+          strstream << replay->value;
+
+          result = result && info.str() == strstream.str();
+        }
         if (result) {
 #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)
           BasicBlock *caseSuccessor = i.getCaseSuccessor();
@@ -1600,12 +1649,16 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
                            ConstantExpr::alloc(0, Expr::Bool))).first;
 
           it->second = OrExpr::create(match, it->second);
+          values.push_back(value);
         }
       }
       bool res;
       bool success = solver->mayBeTrue(state, isDefault, res);
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
+      if (replayPath) {
+        res = res && replay->isDefault;
+      }
       if (res)
         targets.insert(std::make_pair(si->getDefaultDest(), isDefault));
       
@@ -1617,17 +1670,33 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       
       std::vector<ExecutionState*> branches;
       branch(state, conditions, branches);
-        
+      for (std::vector<ExecutionState*>::iterator bit = branches.begin() + 1;
+           bit != branches.end(); ++bit) {
+        (*bit)->pathOS = pathWriter->open(state.pathOS);
+      }
       std::vector<ExecutionState*>::iterator bit = branches.begin();
+      std::vector< ref<Expr> >::iterator vit = values.begin();
       for (std::map<BasicBlock*, ref<Expr> >::iterator it = 
              targets.begin(), ie = targets.end();
            it != ie; ++it) {
         ExecutionState *es = *bit;
-        if (es)
+        if (es) {
           transferToBasicBlock(it->first, bb, *es);
+          if (pathWriter) {
+            if (vit != values.end()) {
+              std::string Str;
+              llvm::raw_string_ostream info(Str);
+              (*vit)->print(info);
+              (*bit)->pathOS << "c" << info.str() << "\n";
+            } else {
+              (*bit)->pathOS << "d\n";
+            }
+          }
+        }
         ++bit;
+        ++vit;
       }
-    }
+    // }
     break;
  }
   case Instruction::Unreachable:
