@@ -559,14 +559,12 @@ void KleeHandler::loadPathFile(std::string name,
         break;
       case 'c':
         SwitchCase c;
-        c.isDefault = false;
-        f >> c.value;
+        f >> c.branch;
         switchCases.push_back(c);
         break;
       case 'd':
         SwitchCase d;
-        d.isDefault = true;
-        d.value = 0;
+        d.branch = -1;
         switchCases.push_back(d);
         break;
       default:

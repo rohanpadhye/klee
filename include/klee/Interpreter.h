@@ -17,8 +17,7 @@
 struct KTest;
 
 typedef struct {
-  long value;
-  bool isDefault;
+  int branch;
 } SwitchCase;
 
 namespace llvm {

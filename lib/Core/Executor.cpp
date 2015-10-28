@@ -1612,9 +1612,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       if (replayPath) {
         replay = &(*replayCases)[casesPosition++];
       }
-      std::map<BasicBlock*, ref<Expr> > targets;
+      std::map<BasicBlock*, std::pair<ref<Expr>,int> > targets;
+      std::set<BasicBlock*> blocks;
       ref<Expr> isDefault = ConstantExpr::alloc(1, Expr::Bool);
-      std::vector< ref<Expr> > values;
+      int count = -1;
 #if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)      
       for (SwitchInst::CaseIt i = si->case_begin(), e = si->case_end();
            i != e; ++i) {
@@ -1629,27 +1630,30 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         bool success = solver->mayBeTrue(state, match, result);
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
+#if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)
+        BasicBlock *caseSuccessor = i.getCaseSuccessor();
+#else
+        BasicBlock *caseSuccessor = si->getSuccessor(i);
+#endif
+        if (blocks.insert(caseSuccessor).second) {
+          ++count;
+        }
         if (replayPath) {
           std::string Str;
           llvm::raw_string_ostream info(Str);
-          value->print(info);
+          info << count;
           std::stringstream strstream;
-          strstream << replay->value;
+          strstream << replay->branch;
 
           result = result && info.str() == strstream.str();
         }
         if (result) {
-#if LLVM_VERSION_CODE >= LLVM_VERSION(3, 1)
-          BasicBlock *caseSuccessor = i.getCaseSuccessor();
-#else
-          BasicBlock *caseSuccessor = si->getSuccessor(i);
-#endif
-          std::map<BasicBlock*, ref<Expr> >::iterator it =
+          std::map<BasicBlock*, std::pair<ref<Expr>,int> >::iterator it =
             targets.insert(std::make_pair(caseSuccessor,
-                           ConstantExpr::alloc(0, Expr::Bool))).first;
+                           std::make_pair(ConstantExpr::alloc(0, Expr::Bool),
+                                          count))).first;
 
-          it->second = OrExpr::create(match, it->second);
-          values.push_back(value);
+          it->second.first = OrExpr::create(match, it->second.first);
         }
       }
       bool res;
@@ -1657,16 +1661,16 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
       if (replayPath) {
-        res = res && replay->isDefault;
+        res = res && replay->branch == -1;
       }
       if (res)
-        targets.insert(std::make_pair(si->getDefaultDest(), isDefault));
+        targets.insert(std::make_pair(si->getDefaultDest(), std::make_pair(isDefault, -1)));
       
       std::vector< ref<Expr> > conditions;
-      for (std::map<BasicBlock*, ref<Expr> >::iterator it = 
+      for (std::map<BasicBlock*, std::pair<ref<Expr>,int> >::iterator it = 
              targets.begin(), ie = targets.end();
            it != ie; ++it)
-        conditions.push_back(it->second);
+        conditions.push_back(it->second.first);
       
       std::vector<ExecutionState*> branches;
       branch(state, conditions, branches);
@@ -1675,18 +1679,17 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         (*bit)->pathOS = pathWriter->open(state.pathOS);
       }
       std::vector<ExecutionState*>::iterator bit = branches.begin();
-      std::vector< ref<Expr> >::iterator vit = values.begin();
-      for (std::map<BasicBlock*, ref<Expr> >::iterator it = 
+      for (std::map<BasicBlock*, std::pair<ref<Expr>,int> >::iterator it = 
              targets.begin(), ie = targets.end();
            it != ie; ++it) {
         ExecutionState *es = *bit;
         if (es) {
           transferToBasicBlock(it->first, bb, *es);
           if (pathWriter) {
-            if (vit != values.end()) {
+            if (it->second.second != -1) {
               std::string Str;
               llvm::raw_string_ostream info(Str);
-              (*vit)->print(info);
+              info << it->second.second;
               (*bit)->pathOS << "c" << info.str() << "\n";
             } else {
               (*bit)->pathOS << "d\n";
@@ -1694,7 +1697,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
           }
         }
         ++bit;
-        ++vit;
       }
     // }
     break;
