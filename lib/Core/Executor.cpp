@@ -239,8 +239,18 @@ namespace {
   
   cl::opt<std::string>
   ReplayUntilBranch("replay-until-branch",
-                    cl::desc("Stop execution when branch with given IID is reached (default=0 (off))"),
+                    cl::desc("Stop execution when branch with given IID is reached (default=\"\" (off)). Use option --replay-until-count to set how many times this branch should be executed and option --next-branch to set the value of the next branch"),
                     cl::init(""));
+
+  cl::opt<int>
+  ReplayUntilCount("replay-until-count",
+                   cl::desc("With --replay-until-branch, set how many times the target branch should be executed before stopping (default=0 (off))"),
+                   cl::init(0));
+
+  cl::opt<int>
+  NextBranch("next-branch",
+             cl::desc("Value (0 or 1) to use for the branch after the stop point given by --replay-until-branch (default=-1 (off))"),
+             cl::init(-1));
 
   cl::opt<unsigned int>
   StopAfterNInstructions("stop-after-n-instructions",
@@ -279,6 +289,7 @@ Executor::Executor(const InterpreterOptions &opts,
   : Interpreter(opts),
     stopOnNextFork(false),
     targetBranch(0),
+    targetCount(0),
     kmodule(0),
     interpreterHandler(ih),
     searcher(0),
@@ -302,6 +313,9 @@ Executor::Executor(const InterpreterOptions &opts,
 
   if (ReplayUntilBranch != "") {
     targetBranch = strtoul(ReplayUntilBranch.c_str(), NULL, 0);
+  }
+  if (ReplayUntilCount != 0) {
+    targetCount = ReplayUntilCount;
   }
   if (coreSolverTimeout) UseForkedCoreSolver = true;
   
@@ -720,6 +734,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   if (stopOnNextFork) {
     fprintf(stderr, "Stopping execution!\n");
     terminateStateEarly(current, "Reached target branch.");
+    return StatePair(0, 0);
   }
 
   if (!isSeeding && !isa<ConstantExpr>(condition) && 
@@ -774,8 +789,11 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
 
   if (!isSeeding) {
     if (replayPath && !isInternal) {
-      assert(replayPosition<replayPath->size() &&
-             "ran out of branches in replay path mode");
+      if (replayPosition >= replayPath->size()) {
+        fprintf(stderr, "Stopping execution!\n");
+        terminateStateEarly(current, "Reached end of path.");
+        return StatePair(0, 0);
+      }
       bool branch = (*replayPath)[replayPosition++];
       
       if (res==Solver::True) {
@@ -1177,8 +1195,16 @@ void Executor::executeLlvmBranch(ExecutionState &state, ref<Expr> iidRef, ref<Ex
   assert(isa<ConstantExpr>(iidRef));
   uint64_t iid = cast<ConstantExpr>(iidRef)->getZExtValue();
   if (iid == targetBranch) {
-    fprintf(stderr, "Reached target branch %lu\n", iid);
-    stopOnNextFork = true;
+    if (targetCount == 0) {
+      fprintf(stderr, "Reached target branch %lu\n", iid);
+      stopOnNextFork = true;
+      if (NextBranch == 0) {
+        state.pathOS << "0\n";
+      } else if (NextBranch == 1) {
+        state.pathOS << "1\n";
+      }
+    }
+    --targetCount;
   }
   // fprintf(stderr, "%lu\n", iid);
 }

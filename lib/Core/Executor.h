@@ -102,6 +102,7 @@ public:
 private:
   bool stopOnNextFork;
   uint64_t targetBranch;
+  int targetCount;
   class TimerInfo;
 
   KModule *kmodule;
