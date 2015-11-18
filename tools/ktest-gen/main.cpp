@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
   kTest.version = modelVersionNumber;
   kTest.numArgs = 0;
   kTest.args = NULL;
-  kTest.numObjects = 0;
+  kTest.numObjects = 1;
   kTest.objects = NULL;
 
   // Allocate a vector of args (Note: The underlying array will be used later)
@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
         argsMode = false;
         kTest.numObjects = argc-i; // 1 extra object is for model_version
         kTest.objects = (KTestObject*) malloc(sizeof(KTestObject)*kTest.numObjects);
-        offset = i; 
+        offset = i + 1; 
       } else {
         kTest.numArgs++;
         args.push_back(arg);
@@ -49,8 +49,9 @@ int main(int argc, char** argv) {
       int o = i - offset;
       KTestObject* obj =  &kTest.objects[o];
 
-      // Find the index of the '=' character in the arg
+      // Find the index of the '=' or '#' character in the arg
       int eqIdx = -1;
+      int hashIdx = -1;
       char* valueStart = NULL;
       int j = 0;
       char c;
@@ -60,11 +61,15 @@ int main(int argc, char** argv) {
           eqIdx = j;
           valueStart = &arg[j+1];
           break;
+        } else if (c == '#') {
+          valueStart = &arg[j+1];
+          hashIdx = j;
+          break;
         }
         j++;
       } while (c != '\0');
 
-      // Ensure that the '=' exists
+      // Key/value pair if '=' exists
       if (eqIdx != -1) {
         // Create a new string from the start of arg till '=' as the name
         obj->name = (char*) malloc(sizeof(char) * (eqIdx+1));
@@ -74,6 +79,18 @@ int main(int argc, char** argv) {
         obj->numBytes = strlen(arg) - eqIdx;
         obj->bytes = (unsigned char*) malloc(sizeof(unsigned char) * obj->numBytes);
         strncpy((char*) obj->bytes, valueStart, obj->numBytes);
+
+      } else if (hashIdx != -1) { 
+        // Otherwise some number of null bytes
+        int hashValue = atoi(valueStart);
+        obj->numBytes = hashValue > 0 ? hashValue : 1; // At least 1
+        obj->bytes = (unsigned char*) malloc(sizeof(unsigned char) * obj->numBytes);
+        memset((char*) obj->bytes, 0, obj->numBytes);
+
+        // Create a new string from the start of arg till '#' as the name
+        obj->name = (char*) malloc(sizeof(char) * (hashIdx+1));
+        strncpy(obj->name, arg, hashIdx);
+        obj->name[hashIdx] = '\0';
       } else {
         // As a fall back, have a name and no value
         obj->name = arg;
@@ -87,7 +104,7 @@ int main(int argc, char** argv) {
     kTest.objects = (KTestObject*) malloc(sizeof(KTestObject));
   }
 
-  KTestObject* obj = &kTest.objects[0];
+  KTestObject* obj = &kTest.objects[kTest.numObjects-1];
   obj->name = modelVersionName;
   obj->numBytes = sizeof(modelVersionNumber);
   obj->bytes = (unsigned char*) &modelVersionNumber;
