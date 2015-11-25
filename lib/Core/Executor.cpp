@@ -803,8 +803,16 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
       bool branch = (*replayPath)[replayPosition++];
       
       if (res==Solver::True) {
+        if (replayPosition >= replayPath->size() && !branch) {
+          fprintf(stderr, "Infeasible path!\n");
+          exit(-1);
+        }
         assert(branch && "hit invalid branch in replay path mode");
       } else if (res==Solver::False) {
+        if (replayPosition >= replayPath->size() && branch) {
+          fprintf(stderr, "Infeasible path!\n");
+          exit(-1);
+        }
         assert(!branch && "hit invalid branch in replay path mode");
       } else {
         // Solve not-taken if needed
