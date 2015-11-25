@@ -247,6 +247,12 @@ namespace {
                    cl::desc("With --replay-until-branch, set how many times the target branch should be executed before stopping (default=0 (off))"),
                    cl::init(0));
 
+  cl::opt<bool>
+  SolveNotTaken("solve-not-taken",
+                cl::desc("Solve branches that are not taken in replay mode"),
+                cl::init(false));
+
+
   cl::opt<int>
   NextBranch("next-branch",
              cl::desc("Value (0 or 1) to use for the branch after the stop point given by --replay-until-branch (default=-1 (off))"),
@@ -801,6 +807,19 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
       } else if (res==Solver::False) {
         assert(!branch && "hit invalid branch in replay path mode");
       } else {
+        // Solve not-taken if needed
+        if (SolveNotTaken) {
+          assert(res == Solver::Unknown && "cannot solve-not-taken for concrete branches");
+          ExecutionState& notTakenState = *current.branch();
+          if (branch) {
+            addConstraint(notTakenState, Expr::createIsZero(condition));
+          } else {
+            addConstraint(notTakenState, condition);
+          }
+          terminateStateEarly(notTakenState, "Terminating not-taken.");
+          removedStates.erase(&notTakenState);
+          delete &notTakenState;
+        }
         // add constraints
         if(branch) {
           res = Solver::True;
@@ -809,6 +828,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
           res = Solver::False;
           addConstraint(current, Expr::createIsZero(condition));
         }
+
       }
     } else if (res==Solver::Unknown) {
       assert(!replayOut && "in replay mode, only one branch can be true.");
@@ -2809,7 +2829,6 @@ void Executor::terminateState(ExecutionState &state) {
   std::set<ExecutionState*>::iterator it = addedStates.find(&state);
   if (it==addedStates.end()) {
     state.pc = state.prevPC;
-
     removedStates.insert(&state);
   } else {
     // never reached searcher, just delete immediately
