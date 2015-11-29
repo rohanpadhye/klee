@@ -781,17 +781,17 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
     terminateStateEarly(current, "Query timed out (fork).");
     return StatePair(0, 0);
   }
-  const InstructionInfo &ii = *current.pc->info;
-  if (!isInternal) {
-    if (pathWriter) {
-      std::string Str;
-      llvm::raw_string_ostream info(Str);
-      info << ii.file << ":" << ii.line << "\n";
-      info << stats::instructions << " ";
-      info << *(current.pc->inst) << '\n';
-      // current.pathOS << info.str();
-    }
-  }
+  // const InstructionInfo &ii = *current.pc->info;
+  // if (!isInternal) {
+  //   if (pathWriter) {
+  //     std::string Str;
+  //     llvm::raw_string_ostream info(Str);
+  //     info << ii.file << ":" << ii.line << "\n";
+  //     info << stats::instructions << " ";
+  //     info << *(current.pc->inst) << '\n';
+  //     current.pathOS << info.str();
+  //   }
+  // }
 
   if (!isSeeding) {
     if (replayPath && !isInternal) {
@@ -1235,6 +1235,10 @@ void Executor::executeLlvmBranch(ExecutionState &state, ref<Expr> iidRef, ref<Ex
     --targetCount;
   }
   // fprintf(stderr, "%lu\n", iid);
+}
+
+void Executor::executeLlvmSwitch(ExecutionState &state, ref<Expr> iidRef, ref<Expr> valueRef, KInstruction *target) {
+
 }
 
 void Executor::executeLlvmCall(ExecutionState &state, ref<Expr> iidRef, KInstruction *target) {

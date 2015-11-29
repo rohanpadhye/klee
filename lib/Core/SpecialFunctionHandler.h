@@ -139,6 +139,7 @@ namespace klee {
     HANDLER(handleSubOverflow);
     HANDLER(handleDivRemOverflow);
     HANDLER(handleLlvmBranch);
+    HANDLER(handleLlvmSwitch);
     HANDLER(handleLlvmCall);
     HANDLER(handleLlvmCallUserMain);
     HANDLER(handleLlvmPushString);
