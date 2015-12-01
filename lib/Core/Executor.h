@@ -102,7 +102,9 @@ public:
 private:
   bool stopOnNextFork;
   uint64_t targetBranch;
+  uint64_t lastBranch;
   int targetCount;
+  std::set<uint64_t> solveBranches;
   class TimerInfo;
 
   KModule *kmodule;

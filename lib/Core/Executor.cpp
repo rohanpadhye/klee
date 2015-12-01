@@ -252,6 +252,10 @@ namespace {
                 cl::desc("Solve branches that are not taken in replay mode"),
                 cl::init(false));
 
+  cl::opt<std::string>
+  SolveBranches("solve-branches",
+                cl::desc("File with the branches that should be solved"),
+                cl::init(""));
 
   cl::opt<int>
   NextBranch("next-branch",
@@ -317,6 +321,13 @@ Executor::Executor(const InterpreterOptions &opts,
       ? std::min(MaxCoreSolverTime,MaxInstructionTime)
       : std::max(MaxCoreSolverTime,MaxInstructionTime)) {
 
+  if (SolveBranches != "") {
+    std::ifstream file(SolveBranches.c_str());
+    uint64_t iid;
+    while (file >> iid) {
+      solveBranches.insert(iid);
+    }
+  }
   if (ReplayUntilBranch != "") {
     targetBranch = strtoul(ReplayUntilBranch.c_str(), NULL, 0);
   }
@@ -816,7 +827,12 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
         assert(!branch && "hit invalid branch in replay path mode");
       } else {
         // Solve not-taken if needed
-        if (SolveNotTaken) {
+        if(solveBranches.find(lastBranch) != solveBranches.end()) {
+          printf("%lu will be solved\n", lastBranch);
+        }else{
+          printf("%lu will not be solved\n", lastBranch);
+        }
+        if (SolveNotTaken && solveBranches.find(lastBranch) != solveBranches.end()) {
           assert(res == Solver::Unknown && "cannot solve-not-taken for concrete branches");
           ExecutionState& notTakenState = *current.branch();
           if (branch) {
@@ -1221,10 +1237,10 @@ void Executor::executeGetValue(ExecutionState &state,
 void Executor::executeLlvmBranch(ExecutionState &state, ref<Expr> iidRef, ref<Expr> valueRef, KInstruction *target) {
 
   assert(isa<ConstantExpr>(iidRef));
-  uint64_t iid = cast<ConstantExpr>(iidRef)->getZExtValue();
-  if (iid == targetBranch) {
+  lastBranch = cast<ConstantExpr>(iidRef)->getZExtValue();
+  if (lastBranch == targetBranch) {
     if (targetCount == 0) {
-      fprintf(stderr, "Reached target branch %lu\n", iid);
+      fprintf(stderr, "Reached target branch %lu\n", lastBranch);
       stopOnNextFork = true;
       if (NextBranch == 0) {
         state.pathOS << "0\n";
@@ -1238,7 +1254,8 @@ void Executor::executeLlvmBranch(ExecutionState &state, ref<Expr> iidRef, ref<Ex
 }
 
 void Executor::executeLlvmSwitch(ExecutionState &state, ref<Expr> iidRef, ref<Expr> valueRef, KInstruction *target) {
-
+  assert(isa<ConstantExpr>(iidRef));
+  lastBranch = cast<ConstantExpr>(iidRef)->getZExtValue();
 }
 
 void Executor::executeLlvmCall(ExecutionState &state, ref<Expr> iidRef, KInstruction *target) {
