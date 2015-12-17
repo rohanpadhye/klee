@@ -72,13 +72,9 @@ STPArrayExprHash::~STPArrayExprHash() {
 
 /***/
 
-STPBuilder::STPBuilder(::VC _vc, bool _optimizeDivides) 
-  : vc(_vc), optimizeDivides(_optimizeDivides)
-{
-  tempVars[0] = buildVar("__tmpInt8", 8);
-  tempVars[1] = buildVar("__tmpInt16", 16);
-  tempVars[2] = buildVar("__tmpInt32", 32);
-  tempVars[3] = buildVar("__tmpInt64", 64);
+STPBuilder::STPBuilder(::VC _vc, bool _optimizeDivides)
+  : vc(_vc), optimizeDivides(_optimizeDivides) {
+
 }
 
 STPBuilder::~STPBuilder() {
@@ -109,16 +105,6 @@ STPBuilder::~STPBuilder() {
   vc_DeleteExpr(t2);
   vc_DeleteExpr(t1);
   return res;
-}
-
-ExprHandle STPBuilder::getTempVar(Expr::Width w) {
-  switch (w) {
-  default: assert(0 && "invalid type");
-  case Expr::Int8: return tempVars[0];
-  case Expr::Int16: return tempVars[1];
-  case Expr::Int32: return tempVars[2];
-  case Expr::Int64: return tempVars[3];
-  }
 }
 
 ExprHandle STPBuilder::getTrue() {
@@ -751,7 +737,7 @@ ExprHandle STPBuilder::constructActual(ref<Expr> e, int *width_out) {
 #endif
 
     // XXX implement my fast path and test for proper handling of sign
-    return vc_sbvModExpr(vc, *width_out, left, right);
+    return vc_sbvRemExpr(vc, *width_out, left, right);
   }
 
     // Bitwise
