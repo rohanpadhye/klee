@@ -776,6 +776,7 @@ static const char *modelledExternals[] = {
   "llvm.va_start",
   "llvm.va_end",
   "llvm_branch",
+  "llvm_switch_",
   "llvm_call",
   "llvm_call_user_main",
   "llvm_push_string",

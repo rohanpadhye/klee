@@ -135,6 +135,7 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
 
   // shadow execution
   add("llvm_branch", handleLlvmBranch, false),
+  add("llvm_switch_", handleLlvmSwitch, false),
   add("llvm_call", handleLlvmCall, false),
   add("llvm_call_user_main", handleLlvmCallUserMain, false),
   add("llvm_push_string", handleLlvmPushString, false),
@@ -790,6 +791,18 @@ void SpecialFunctionHandler::handleLlvmBranch(ExecutionState &state, KInstructio
 
     // Process the branch in the executor
     executor.executeLlvmBranch(state, arguments[0], arguments[5], target);
+    lockInstrumentation = false;
+  }
+}
+
+void SpecialFunctionHandler::handleLlvmSwitch(ExecutionState &state, KInstruction *target, std::vector<ref<Expr> > &arguments) {
+  if (!lockInstrumentation) {
+    lockInstrumentation = true;
+
+    assert(arguments.size() == 3);
+
+    // Process the branch in the executor
+    executor.executeLlvmSwitch(state, arguments[0], arguments[1], target);
     lockInstrumentation = false;
   }
 }

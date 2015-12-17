@@ -102,7 +102,9 @@ public:
 private:
   bool stopOnNextFork;
   uint64_t targetBranch;
+  uint64_t lastBranch;
   int targetCount;
+  std::set<uint64_t> solveBranches;
   class TimerInfo;
 
   KModule *kmodule;
@@ -346,6 +348,9 @@ private:
   
   // Handle an LLVM branch during replay
   void executeLlvmBranch(ExecutionState &state, ref<Expr> iid, ref<Expr> value, KInstruction *target);
+
+  // Handle an LLVM switch during replay
+  void executeLlvmSwitch(ExecutionState &state, ref<Expr> iid, ref<Expr> value, KInstruction *target);
 
   // Handle an LLVM call during replay
   void executeLlvmCall(ExecutionState &state, ref<Expr> iid, KInstruction *target);

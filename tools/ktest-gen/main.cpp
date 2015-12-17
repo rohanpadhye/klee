@@ -52,46 +52,54 @@ int main(int argc, char** argv) {
       // Find the index of the '=' or '#' character in the arg
       int eqIdx = -1;
       int hashIdx = -1;
-      char* valueStart = NULL;
+      char* eqValueStart = NULL;
+      char* hashValueStart = NULL;
       int j = 0;
       char c;
       do {
         c = arg[j];
         if (c == '=') {
           eqIdx = j;
-          valueStart = &arg[j+1];
+          eqValueStart = &arg[j+1];
           break;
         } else if (c == '#') {
-          valueStart = &arg[j+1];
+          hashValueStart = &arg[j+1];
           hashIdx = j;
-          break;
         }
         j++;
       } while (c != '\0');
 
-      // Key/value pair if '=' exists
-      if (eqIdx != -1) {
-        // Create a new string from the start of arg till '=' as the name
-        obj->name = (char*) malloc(sizeof(char) * (eqIdx+1));
-        strncpy(obj->name, arg, eqIdx);
-        obj->name[eqIdx] = '\0';
-        // Create a new string from the '=' till the end of arg as the value
-        obj->numBytes = strlen(arg) - eqIdx;
-        obj->bytes = (unsigned char*) malloc(sizeof(unsigned char) * obj->numBytes);
-        strncpy((char*) obj->bytes, valueStart, obj->numBytes);
-
-      } else if (hashIdx != -1) { 
-        // Otherwise some number of null bytes
-        int hashValue = atoi(valueStart);
+      if (hashIdx != -1) {
+        // Some number of null bytes if '#' exists
+        int hashValue = atoi(hashValueStart);
         obj->numBytes = hashValue > 0 ? hashValue : 1; // At least 1
         obj->bytes = (unsigned char*) malloc(sizeof(unsigned char) * obj->numBytes);
         memset((char*) obj->bytes, 0, obj->numBytes);
+        if (eqIdx == -1 && obj->numBytes == 144) {
+          obj->bytes[8] = (char)1;
+        }
 
         // Create a new string from the start of arg till '#' as the name
         obj->name = (char*) malloc(sizeof(char) * (hashIdx+1));
         strncpy(obj->name, arg, hashIdx);
         obj->name[hashIdx] = '\0';
-      } else {
+      } else if (eqIdx != -1) {
+        // Key/value pair if '=' exists
+        // Create a new string from the start of arg till '=' as the name
+        obj->name = (char*) malloc(sizeof(char) * (eqIdx+1));
+        strncpy(obj->name, arg, eqIdx);
+        obj->name[eqIdx] = '\0';
+
+        // Create a new string from the '=' till the end of arg as the value
+        obj->numBytes = strlen(arg) - eqIdx;
+        obj->bytes = (unsigned char*) malloc(sizeof(unsigned char) * obj->numBytes);
+      }
+
+      if (eqIdx != -1) {
+        strncpy((char*) obj->bytes, eqValueStart, strlen(arg) - eqIdx);
+      }
+
+      if (eqIdx == -1 && hashIdx == -1) {
         // As a fall back, have a name and no value
         obj->name = arg;
         obj->numBytes = 0;
